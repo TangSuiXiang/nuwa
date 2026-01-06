@@ -1,7 +1,7 @@
 import pytest
 import logging
 
-from src.dag.search import (
+from src.nuwa.search import (
     get_google_search_tool,
     get_baidu_search_tool,
     get_bing_search_tool,

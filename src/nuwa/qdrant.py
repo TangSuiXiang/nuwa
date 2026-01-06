@@ -1,12 +1,12 @@
 import re
 import json
-import torch
 import logging
+import numpy as np
+
 from typing import List, Optional
 from uuid import uuid4
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
 from openai import AsyncOpenAI
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http.models import (
@@ -37,6 +37,8 @@ class QdrantMessagesManager(MessagesManager):
         https: bool = False,
         vector_size: int = 4096,
         embedding_model: str = "qwen3-embedding:8b-FP16",
+        similarity_threshold: float = 0.7,
+        min_chunk_length: int = 50,
     ):
         self.collection_name = collection_name
         self.vector_size = vector_size
@@ -44,6 +46,8 @@ class QdrantMessagesManager(MessagesManager):
         self.client = AsyncQdrantClient(url=url, api_key=api_key, https=https)
         self._collection_created = False
         self.embedding_client = embedding_client
+        self.similarity_threshold = similarity_threshold
+        self.min_chunk_length = min_chunk_length
 
     async def get_embeddings(self, inputs: List[str]) -> List[List[float]]:
         return await get_embeddings(
@@ -93,10 +97,6 @@ class QdrantMessagesManager(MessagesManager):
 
         messages: List[ChatCompletionMessageParam] = []
 
-        # If no user input, return empty list
-        # if not user_input.strip():
-        #     return []
-
         try:
             # Get embeddings for semantic search
             query_embedding = (await self.get_embeddings([user_input]))[0]
@@ -121,7 +121,7 @@ class QdrantMessagesManager(MessagesManager):
             logger.info("points %s", len(search_result.points))
             for point in search_result.points:
                 conversation_id = point.payload.get("conversation_id", "")
-                if conversation_id == "" or conversation_id in conversation_ids:
+                if not conversation_id or conversation_id in conversation_ids:
                     continue
                 conversation_ids.append(conversation_id)
 
@@ -145,7 +145,7 @@ class QdrantMessagesManager(MessagesManager):
                 msg_ids = []
                 for record in conversation_records:
                     msg_id = record.payload.get("msg_id")
-                    if msg_id in msg_ids:
+                    if not msg_id or msg_id in msg_ids:
                         continue
                     logger.info(
                         "conversation_id %s, msg_id %s", conversation_id, msg_id
@@ -161,6 +161,27 @@ class QdrantMessagesManager(MessagesManager):
             logger.error(f"Error retrieving messages for session {session_id}: {e}")
 
         return messages
+
+    @staticmethod
+    def _cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
+        """
+        计算两个向量的余弦相似度，不依赖torch。
+
+        Args:
+            vec1: 第一个向量
+            vec2: 第二个向量
+
+        Returns:
+            float: 余弦相似度
+        """
+        dot_product = np.dot(vec1, vec2)
+        norm1 = np.linalg.norm(vec1)
+        norm2 = np.linalg.norm(vec2)
+
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+
+        return dot_product / (norm1 * norm2)
 
     def _convert_payload_to_message(
         self, payload: dict
@@ -196,8 +217,8 @@ class QdrantMessagesManager(MessagesManager):
         conversation_id = str(uuid4())
         points: List[PointStruct] = []
         now = datetime.now(tz=ZoneInfo("Asia/Shanghai"))
-        while messages and messages[0].get("role") != "user":
-            del messages[0]
+        if messages and messages[0].get("role") != "user":
+            raise ValueError("messages the first must be user")
 
         for msg_id, message in enumerate(messages, 1):
             logger.info("msg_id %s, message %s", msg_id, message)
@@ -266,11 +287,39 @@ class QdrantMessagesManager(MessagesManager):
                         **message,
                         "session_id": session_id,
                         "snippet": snippet,
-                        "create_time": now.isoformat(),  # Convert to ISO format string
+                        "create_time": int(now.timestamp() * 1000),
                     },
                 )
             )
         return points
+
+    def _split_into_chunks(self, text: str) -> List[str]:
+        """
+        将文本分割成段落。
+
+        Args:
+            text: 要分割的文本
+
+        Returns:
+            List[str]: 段落列表
+        """
+        # 按段落分割，保留分隔符
+        paragraphs = re.split(r"(\n\s*\n)", text)
+        # 过滤空段落并合并分隔符
+        chunks = []
+        current = ""
+
+        for p in paragraphs:
+            if p.strip() == "" and current:
+                chunks.append(current.strip())
+                current = ""
+            elif p.strip():
+                current += p
+
+        if current.strip():
+            chunks.append(current.strip())
+
+        return chunks
 
     async def _process_text_message(
         self,
@@ -283,36 +332,30 @@ class QdrantMessagesManager(MessagesManager):
         points: List[PointStruct],
     ):
         """Process text content messages with semantic chunking."""
-        paragraphs = [p for p in re.split(r"\n+", content) if p.strip()]
+        paragraphs = [p.strip() for p in re.split(r"\n+", content) if p.strip()]
         if not paragraphs:
             return
 
         current_chunk = paragraphs[0]
-        current_vector = torch.tensor(
-            data=(await self.get_embeddings([current_chunk]))[0],
-            dtype=torch.float32,
-        ).unsqueeze(0)
+        current_vector = (await self.get_embeddings([current_chunk]))[0]
 
         for paragraph in paragraphs[1:]:
             if not paragraph.strip():
                 continue
 
-            paragraph_vector = torch.tensor(
-                data=(await self.get_embeddings([paragraph]))[0],
-                dtype=torch.float32,
-            ).unsqueeze(0)
+            paragraph_vector = (await self.get_embeddings([paragraph]))[0]
 
             # Check semantic similarity
-            similarity = torch.nn.functional.cosine_similarity(
-                current_vector, paragraph_vector
-            ).item()
+            similarity = self._cosine_similarity(
+                np.array(current_vector), np.array(paragraph_vector)
+            )
 
-            if similarity > 0.7 or len(current_chunk) < 50:  # Similar enough to merge
+            if (
+                similarity > self.similarity_threshold
+                or len(current_chunk) < self.min_chunk_length
+            ):  # Similar enough to merge
                 current_chunk += "\n" + paragraph
-                current_vector = torch.tensor(
-                    data=(await self.get_embeddings([current_chunk]))[0],
-                    dtype=torch.float32,
-                ).unsqueeze(0)
+                current_vector = (await self.get_embeddings([current_chunk]))[0]
             else:
                 # Save current chunk and start new one
                 points = await self._save_chunk(
@@ -349,49 +392,21 @@ class QdrantMessagesManager(MessagesManager):
         msg_id: int,
         now: datetime,
         points: List[PointStruct],
-        vector: torch.Tensor,
+        vector: List[float],
     ):
         """Save a single chunk as a point."""
         points.append(
             PointStruct(
                 id=str(uuid4()),
-                vector=vector.squeeze(0).tolist(),
+                vector=vector,
                 payload={
                     "msg_id": msg_id,
                     "conversation_id": conversation_id,
                     **message,
                     "session_id": session_id,
                     "snippet": chunk,
-                    "create_time": now.isoformat(),  # Convert to ISO format string
+                    "create_time": int(now.timestamp() * 1000),
                 },
             )
         )
         return points
-
-
-# # Only run main if this file is executed directly
-# if __name__ == "__main__":
-#     import asyncio
-
-#     async def main():
-#         from core.config import settings
-#         from core.dag.chat import ChatLLM
-
-#         qmm = QdrantMessagesManager(
-#             api_key=settings.QDRANT_API_KEY,
-#             url=settings.QDRANT_URL,
-#             collection_name="test_chat",
-#         )
-#         client = ChatLLM(
-#             model="deepseek-v3.2-exp",
-#             system_prompt="你是一个女仆",
-#             session_id="8464ee2e-91f4-40bc-b5fd-f73af3de9bbd",
-#             messages_manager=qmm,
-#             extra_body={"enable_thinking": True},
-#             api_key="sk-ce6b04655e724996b4f5ff38c901e8b4",
-#             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-#         )
-#         async for chunk in client.run({"user": "你能做什么，详细说说"}):
-#             print(chunk)
-
-#     asyncio.run(main())

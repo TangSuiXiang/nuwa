@@ -1,8 +1,8 @@
 import pytest
 import logging
 
-from src.dag.re_act import ReActAgent
-from src.dag.tool import ToolsManager, ToolObjectParameter, ToolParameter
+from src.nuwa.re_act import ReActAgent
+from src.nuwa.tool import ToolsManager, ToolObjectParameter, ToolParameter
 
 logger = logging.getLogger()
 
