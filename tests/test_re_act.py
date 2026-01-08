@@ -369,3 +369,31 @@ async def test_re_act_agent_history_with_think(api_key: str):
         }
     ):
         logger.info("测试 %s", c)
+
+
+@pytest.mark.asyncio
+async def test_re_act_agent_selection(api_key: str):
+    agent = ReActAgent(
+        model="deepseek-v3.2",
+        system_prompt="你是一个{role}",
+        api_key=api_key,
+        extra_body={"enable_thinking": True},
+        stream=True,
+        with_time=True,
+        enable_chat_history=True,
+        enable_selection=True,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+    async for c in agent.run(
+        {
+            "user": "请调用工具询问用户现在是白天还是黑夜",
+            "system": {"role": "通用助手"},
+        }
+    ):
+        logger.info("测试 %s", c)
+    async for c in agent.run({
+            "user": "黑夜",
+            "system": {"role": "通用助手"},
+    }):
+        logger.info("测试 %s", c)
+        

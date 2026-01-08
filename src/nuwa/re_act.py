@@ -5,7 +5,14 @@ import logging
 
 from uuid import uuid4
 from .chat import ChatLLM
-from .tool import Function, ToolEntity, ToolParameter, ToolsManager
+from .tool import (
+    Function,
+    ToolEntity,
+    ToolParameter,
+    ToolsManager,
+    ToolObjectParameter,
+    ToolArrayParameter,
+)
 from .base import MessagesManager, InputChunk
 from pydantic import TypeAdapter
 from typing import List, Optional, Dict, Union, AsyncGenerator, Any
@@ -60,6 +67,7 @@ class ReActAgent(ChatLLM):
         stop: List[str] = None,
         base_url: str = "https://api.openai.com/v1",
         enable_chat_history: bool = True,
+        enable_selection: bool = False,
     ):
         super().__init__(
             model=model,
@@ -96,6 +104,33 @@ class ReActAgent(ChatLLM):
                 parameters=ToolParameter(type="string", description="给用户的最终响应"),
             )
         )
+        if enable_selection:
+            self.tool_names.append("request_user_choice")
+            self.tools.append(
+                ToolEntity(
+                    name="request_user_choice",
+                    parameters=ToolObjectParameter(
+                        type="object",
+                        description="提供问题和多个可选项并询问用户的选择",
+                        properties={
+                            "question": ToolParameter(
+                                type="string", description="询问用户的问题"
+                            ),
+                            "options": ToolArrayParameter(
+                                type="array",
+                                description="可选项列表",
+                                items=ToolParameter(
+                                    type="string", description="单个可选项"
+                                ),
+                            ),
+                            "recommended_option": ToolParameter(
+                                type="string",
+                                description="可选项列表中最推荐的一个选项",
+                            ),
+                        },
+                    ),
+                )
+            )
         self.think_io = io.StringIO()
         self.thought_io = io.StringIO()
         self.action_io = io.StringIO()
@@ -578,7 +613,10 @@ class ReActAgent(ChatLLM):
             pre_chunk = InputChunk(state="DOING", content="")
             async for chunk in super(ChatLLM, self).run(input_dict):
                 for action in self.parse_labels(chunk):
-                    if action.get("name") != "answer":
+                    if (
+                        action.get("name") != "answer"
+                        and action.get("name") != "request_user_choice"
+                    ):
                         actions.append(action)
                         continue
                     if len(actions) > 0:
@@ -638,9 +676,10 @@ class ReActAgent(ChatLLM):
                         self.historical_messages = []
                         self.round_idx = 0
                         self.new_messages_idx = 0
-                    yield InputChunk(
-                        state="END", content=json.loads(action.get("arguments"))
-                    )
+                    if action.get("name") == "answer":
+                        yield InputChunk(
+                            state="END", content=json.loads(action.get("arguments"))
+                        )
                     self.cache = []
                     self.open_symbols = []
                     return
