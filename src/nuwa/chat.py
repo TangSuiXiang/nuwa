@@ -3,7 +3,7 @@ import logging
 
 from uuid import uuid4
 from json_repair import loads
-from typing import Optional, AsyncGenerator, Dict, Any, List
+from typing import Optional, AsyncGenerator, Dict, Any, List, Callable, Awaitable
 from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionAssistantMessageParam,
@@ -34,10 +34,13 @@ class ChatLLM(OpenAI):
         temperature: float = 0.6,
         extra_body: Optional[Dict[str, Any]] = None,
         with_time: bool = False,
+        with_others: str = "",
         stop: Optional[list] = None,
         base_url: str = "https://api.openai.com/v1",
+        hook_tool_call: Optional[Callable[["ChatLLM", Function], Awaitable[Any]]] = None,
     ):
         self.session_id = session_id or str(uuid4())
+        self.hook_tool_call = hook_tool_call
         self.messages_manager = messages_manager
         self.tools_manager = tools_manager
         self.mcp = mcp
@@ -60,6 +63,7 @@ class ChatLLM(OpenAI):
             temperature=temperature,
             extra_body=extra_body or {},
             with_time=with_time,
+            with_others=with_others,
             stop=stop or [],
             base_url=base_url,
         )
@@ -82,7 +86,6 @@ class ChatLLM(OpenAI):
                     name=func.get("name"),
                     arguments=loads(func.get("arguments") or "{}"),
                 )
-                logger.info("ret %s", ret)
                 return ret.data
         else:
             raise ValueError(f"function not exists {func}")

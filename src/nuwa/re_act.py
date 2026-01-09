@@ -15,7 +15,7 @@ from .tool import (
 )
 from .base import MessagesManager, InputChunk
 from pydantic import TypeAdapter
-from typing import List, Optional, Dict, Union, AsyncGenerator, Any
+from typing import List, Optional, Dict, Union, AsyncGenerator, Any, Callable, Awaitable
 from openai.types.chat import (
     ChatCompletionSystemMessageParam,
     ChatCompletionToolMessageParam,
@@ -64,10 +64,12 @@ class ReActAgent(ChatLLM):
         extra_body: Dict[str, Any] = None,
         max_loop: int = 3,
         with_time: bool = False,
+        with_others: str = "",
         stop: List[str] = None,
         base_url: str = "https://api.openai.com/v1",
         enable_chat_history: bool = True,
         enable_selection: bool = False,
+        hook_tool_call: Optional[Callable[[ChatLLM, Function], Awaitable[Any]]] = None,
     ):
         super().__init__(
             model=model,
@@ -83,7 +85,9 @@ class ReActAgent(ChatLLM):
             extra_body=extra_body,
             stop=stop,
             with_time=with_time,
+            with_others=with_others,
             base_url=base_url,
+            hook_tool_call=hook_tool_call,
         )
         self.enable_chat_history = enable_chat_history
         self.max_loop = max_loop
@@ -767,7 +771,10 @@ class ReActAgent(ChatLLM):
                     for action in actions:
                         tool_response = {}
                         try:
-                            tool_response = await self.call_tool(action)
+                            if self.hook_tool_call:
+                                tool_response = await self.hook_tool_call(self, action)
+                            else:
+                                tool_response = await self.call_tool(action)
                         except Exception as e:
                             tool_response["err_msg"] = str(e)
                         tool_call_id = str(uuid4())

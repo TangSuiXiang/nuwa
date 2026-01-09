@@ -28,11 +28,13 @@ class OpenAI(Node):
         extra_body: Optional[Dict[str, Any]] = None,
         stop: Optional[List[str]] = None,
         with_time: bool = False,
+        with_others: str = "",
         base_url: str = "https://api.openai.com/v1",
         stream: bool = False,
     ):
         self.system_prompt = system_prompt
         self.with_time = with_time
+        self.with_others = with_others
         self.model = model
         self.temperature = temperature
         self.extra_body = extra_body or {}
@@ -68,10 +70,14 @@ class OpenAI(Node):
     ) -> List[ChatCompletionMessageParam]:
         input_dict = input_dict or {}
         system_content = self.system_prompt.format(**input_dict.get("system", {}))
+        proset_infos = []
+        if self.with_others:
+            proset_infos.append(self.with_others)
         if self.with_time:
-            system_content = (
-                "系统时间：{}\n\n".format(datetime.now().isoformat()) + system_content
-            )
+            proset_infos.append("系统时间：{}".format(datetime.now().isoformat()))
+        if proset_infos:
+            proset_infos.append("\n")
+        system_content = "\n".join(proset_infos) + system_content
         user_content = input_dict.get("user", "")
         messages: List[ChatCompletionMessageParam] = [
             ChatCompletionSystemMessageParam(role="system", content=system_content),

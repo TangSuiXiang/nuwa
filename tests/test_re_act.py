@@ -2,7 +2,7 @@ import pytest
 import logging
 
 from src.nuwa.re_act import ReActAgent
-from src.nuwa.tool import ToolsManager, ToolObjectParameter, ToolParameter
+from src.nuwa.tool import ToolsManager, ToolObjectParameter, ToolParameter, Function
 
 logger = logging.getLogger()
 
@@ -391,9 +391,77 @@ async def test_re_act_agent_selection(api_key: str):
         }
     ):
         logger.info("测试 %s", c)
-    async for c in agent.run({
+    async for c in agent.run(
+        {
             "user": "黑夜",
             "system": {"role": "通用助手"},
-    }):
+        }
+    ):
         logger.info("测试 %s", c)
-        
+
+
+@pytest.mark.asyncio
+async def test_re_act_agent_with_others(api_key: str):
+    agent = ReActAgent(
+        model="deepseek-v3.2",
+        system_prompt="你是一个{role}",
+        api_key=api_key,
+        extra_body={"enable_thinking": True},
+        stream=True,
+        with_time=True,
+        with_others="用户ID: 10086",
+        enable_chat_history=True,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+    async for c in agent.run(
+        {
+            "user": "我的用户ID是多少",
+            "system": {"role": "通用助手"},
+        }
+    ):
+        logger.info("测试 %s", c)
+
+
+@pytest.mark.asyncio
+async def test_re_act_agent_hook_tool_call(api_key: str):
+    tools = ToolsManager()
+
+    @tools.tool(
+        name="get_weather",
+        description="获取指定城市的天气。",
+        parameters=ToolObjectParameter(
+            type="object",
+            properties={
+                "city": ToolParameter(type="string", description="中国城市完整名称")
+            },
+        ),
+    )
+    async def get_weather(city: str):
+        return {"desc": "部分晴朗：19摄氏度，湿度69%"}
+
+    async def test_hook(agent: ReActAgent, func: Function):
+        logger.info("before call tool")
+        resp = await agent.call_tool(func)
+        logger.info("after call tool %s", resp)
+        return resp
+
+    agent = ReActAgent(
+        model="deepseek-v3.2",
+        system_prompt="你是一个{role}",
+        api_key=api_key,
+        extra_body={"enable_thinking": True},
+        stream=True,
+        tools_manager=tools,
+        with_time=True,
+        with_others="用户ID: 10086",
+        enable_chat_history=True,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        hook_tool_call=test_hook,
+    )
+    async for c in agent.run(
+        {
+            "user": "广州今天的天气怎么样",
+            "system": {"role": "通用助手"},
+        }
+    ):
+        logger.info("测试 %s", c)
