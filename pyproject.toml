@@ -1,6 +1,6 @@
 [project]
 name = "nuwa"
-version = "0.3.8"
+version = "0.4.8"
 description = "A deity capable of creating AI beings"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -29,11 +29,11 @@ pip install .
 ```python
 # simple_agent.py
 import asyncio
-from src.nuwa.llm import OpenAI
+from src.nuwa.llm import LLMNode
 
 async def main():
     # 初始化 LLM
-    llm = OpenAI(
+    llm = LLMNode(
         model="gpt-4",
         system_prompt="您是一个乐于助人的助手。",
         api_key="your-api-key-here"
@@ -64,10 +64,10 @@ python simple_agent.py
 ```python
 # chat_agent.py
 import asyncio
-from src.nuwa.chat import ChatLLM
-from src.nuwa.base import MessagesManager
+from src.nuwa.chat import ConversationAgent
+from src.nuwa.base import ConversationStorage
 
-class SimpleMemory(MessagesManager):
+class SimpleMemory(ConversationStorage):
     def __init__(self):
         self.messages = {}
     
@@ -82,7 +82,7 @@ class SimpleMemory(MessagesManager):
 async def main():
     # 使用记忆初始化
     memory = SimpleMemory()
-    chat_agent = ChatLLM(
+    chat_agent = ConversationAgent(
         model="gpt-4",
         system_prompt="您是一个友好的对话式 AI。",
         api_key="your-api-key-here",
@@ -115,11 +115,11 @@ if __name__ == "__main__":
 ```python
 # react_agent.py
 import asyncio
-from src.nuwa.re_act import ReActAgent
-from src.nuwa.tool import ToolsManager, ToolObjectParameter, ToolParameter
+from src.nuwa.react_agent import ReasoningActingAgent
+from src.nuwa.tool import ToolRegistry, ToolObjectParameter, ToolParameter
 
-# 创建工具管理器
-tools = ToolsManager()
+# 创建工具注册表
+tools = ToolRegistry()
 
 # 注册计算器工具
 @tools.tool(
@@ -143,8 +143,8 @@ def calculate(expression: str):
         return {"error": str(e)}
 
 async def main():
-    # 使用工具初始化 ReAct Agent
-    agent = ReActAgent(
+    # 使用工具初始化 ReasoningActing Agent
+    agent = ReasoningActingAgent(
         model="gpt-4",
         system_prompt="您是一个具有计算能力的乐于助人的助手。",
         api_key="your-api-key-here",
@@ -178,21 +178,21 @@ Nuwa 可与任何 OpenAI 兼容的 API 配合使用。配置您的提供商：
 
 ```python
 # OpenAI
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="gpt-4",
     api_key="sk-your-openai-key",
     base_url="https://api.openai.com/v1"
 )
 
 # Anthropic（通过 OpenAI 兼容层）
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="claude-3-opus-20240229",
     api_key="your-anthropic-key",
     base_url="https://api.anthropic.com/v1/messages"  # 根据需要调整
 )
 
 # DeepSeek
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="deepseek-v3.2",
     api_key="your-deepseek-key",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -205,9 +205,9 @@ agent = ReActAgent(
 
 ```python
 import os
-from src.nuwa.re_act import ReActAgent
+from src.nuwa.react_agent import ReasoningActingAgent
 
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="gpt-4",
     system_prompt="您是一个乐于助人的助手。",
     api_key=os.getenv("OPENAI_API_KEY"),
@@ -226,7 +226,7 @@ python your_agent.py
 ### 模式 1：多轮对话
 ```python
 async def multi_turn_conversation():
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="gpt-4",
         system_prompt="您是一个乐于助人的助手。",
         api_key="your-key",
@@ -267,7 +267,7 @@ async def fetch_weather(city: str):
 
 ### 模式 3：带思考模式的流式响应
 ```python
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="deepseek-v3.2",
     system_prompt="在回答前逐步思考。",
     api_key="your-key",

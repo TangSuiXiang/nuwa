@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, AsyncMock, patch
 import logging
 
-from src.nuwa.alarm import AlarmManager, AlarmTask, alarm_manager, get_alarm_tool
-from src.nuwa.re_act import ReActAgent
+from src.nuwa.scheduling_tools import AlarmManager, AlarmTask, alarm_manager, get_alarm_tool
+from src.nuwa.react_agent import ReasoningActingAgent
 from src.nuwa.tool import Tool
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class TestAlarmManager:
     async def test_set_alarm_for_oneself(self):
         """测试为agent自己设置闹钟"""
         manager = AlarmManager()
-        mock_agent = Mock(spec=ReActAgent)
+        mock_agent = Mock(spec=ReasoningActingAgent)
         mock_callback = AsyncMock()
 
         # 设置未来时间
@@ -92,11 +92,11 @@ class TestAlarmManager:
         mock_callback = AsyncMock()
         past_time = datetime.now() - timedelta(seconds=10)
 
-        with patch('src.nuwa.alarm.logger.warning') as mock_warning:
+        with patch('src.nuwa.scheduling_tools.logger.warning') as mock_warning:
             alarm_id = await manager.set_alarm_for_oneself(
                 time=past_time,
                 reminder="过去时间",
-                agent=Mock(spec=ReActAgent),
+                agent=Mock(spec=ReasoningActingAgent),
                 callback=mock_callback
             )
 
@@ -115,7 +115,7 @@ class TestAlarmManager:
         alarm_id = await manager.set_alarm_for_oneself(
             time=future_time,
             reminder="可取消的闹钟",
-            agent=Mock(spec=ReActAgent)
+            agent=Mock(spec=ReasoningActingAgent)
         )
 
         assert alarm_id in manager.tasks
@@ -145,7 +145,7 @@ class TestAlarmManager:
         alarm_id1 = await manager.set_alarm_for_oneself(
             time=future_time,
             reminder="第一个闹钟",
-            agent=Mock(spec=ReActAgent)
+            agent=Mock(spec=ReasoningActingAgent)
         )
         alarm_id2 = await manager.set_alarm_for_user(
             time=future_time + timedelta(minutes=1),
@@ -179,7 +179,7 @@ class TestAlarmManager:
             return await manager.set_alarm_for_oneself(
                 time=future_time,
                 reminder="并发测试",
-                agent=Mock(spec=ReActAgent)
+                agent=Mock(spec=ReasoningActingAgent)
             )
         
         # 同时创建多个任务
@@ -196,11 +196,11 @@ class TestAlarmManager:
         manager = AlarmManager()
         future_time = datetime.now() + timedelta(seconds=0.1)
         
-        with patch('src.nuwa.alarm.logger.debug') as mock_info:
+        with patch('src.nuwa.scheduling_tools.logger.debug') as mock_info:
             alarm_id = await manager.set_alarm_for_oneself(
                 time=future_time,
                 reminder="无回调测试",
-                agent=Mock(spec=ReActAgent),
+                agent=Mock(spec=ReasoningActingAgent),
                 callback=None
             )
             await asyncio.sleep(0.15)
@@ -219,11 +219,11 @@ class TestAlarmManager:
         async def failing_callback(msg):
             raise ValueError("回调失败")
         
-        with patch('src.nuwa.alarm.logger.error') as mock_error:
+        with patch('src.nuwa.scheduling_tools.logger.error') as mock_error:
             alarm_id = await manager.set_alarm_for_oneself(
                 time=future_time,
                 reminder="异常测试",
-                agent=Mock(spec=ReActAgent),
+                agent=Mock(spec=ReasoningActingAgent),
                 callback=failing_callback
             )
             await asyncio.sleep(0.15)
@@ -241,7 +241,7 @@ class TestGetAlarmTool:
     @pytest.mark.asyncio
     async def test_get_alarm_tool(self):
         """测试工具创建"""
-        mock_agent = Mock(spec=ReActAgent)
+        mock_agent = Mock(spec=ReasoningActingAgent)
         tool = await get_alarm_tool(mock_agent)
         
         assert isinstance(tool, Tool)
@@ -254,7 +254,7 @@ class TestGetAlarmTool:
     @pytest.mark.asyncio
     async def test_alarm_tool_set_alarm_oneself(self):
         """通过工具为agent自己设置闹钟"""
-        mock_agent = Mock(spec=ReActAgent)
+        mock_agent = Mock(spec=ReasoningActingAgent)
         tool = await get_alarm_tool(mock_agent)
         
         # 设置未来时间
@@ -282,7 +282,7 @@ class TestGetAlarmTool:
     @pytest.mark.asyncio
     async def test_alarm_tool_set_alarm_user(self):
         """通过工具为用户设置闹钟"""
-        mock_agent = Mock(spec=ReActAgent)
+        mock_agent = Mock(spec=ReasoningActingAgent)
         tool = await get_alarm_tool(mock_agent)
         
         future_time = datetime.now() + timedelta(seconds=0.5)
@@ -305,7 +305,7 @@ class TestGetAlarmTool:
     @pytest.mark.asyncio
     async def test_alarm_tool_invalid_time(self):
         """测试无效时间格式"""
-        mock_agent = Mock(spec=ReActAgent)
+        mock_agent = Mock(spec=ReasoningActingAgent)
         tool = await get_alarm_tool(mock_agent)
         
         result = await tool.func(
@@ -320,7 +320,7 @@ class TestGetAlarmTool:
     @pytest.mark.asyncio
     async def test_alarm_tool_exception_handling(self):
         """测试工具异常处理"""
-        mock_agent = Mock(spec=ReActAgent)
+        mock_agent = Mock(spec=ReasoningActingAgent)
         tool = await get_alarm_tool(mock_agent)
         
         # 模拟设置闹钟时抛出异常
@@ -341,8 +341,8 @@ class TestGlobalAlarmManager:
     @pytest.mark.asyncio
     async def test_global_manager_singleton(self):
         """测试全局实例是单例"""
-        from src.nuwa.alarm import alarm_manager as gm1
-        from src.nuwa.alarm import alarm_manager as gm2
+        from src.nuwa.scheduling_tools import alarm_manager as gm1
+        from src.nuwa.scheduling_tools import alarm_manager as gm2
         assert gm1 is gm2
 
     @pytest.mark.asyncio
@@ -352,7 +352,7 @@ class TestGlobalAlarmManager:
         alarm_id = await alarm_manager.set_alarm_for_oneself(
             time=future_time,
             reminder="全局实例测试",
-            agent=Mock(spec=ReActAgent)
+            agent=Mock(spec=ReasoningActingAgent)
         )
         
         assert alarm_id in alarm_manager.tasks

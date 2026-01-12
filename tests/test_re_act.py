@@ -1,15 +1,16 @@
 import pytest
 import logging
 
-from src.nuwa.re_act import ReActAgent
-from src.nuwa.tool import ToolsManager, ToolObjectParameter, ToolParameter, Function
+from src.nuwa.react_agent import ReasoningActingAgent
+from src.nuwa.chat import ConversationAgent
+from src.nuwa.tool import ToolRegistry, ToolObjectParameter, ToolParameter, ToolInvocation
 
 logger = logging.getLogger()
 
 
 @pytest.mark.asyncio
 async def test_re_act_agent_once_chat(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个通用助手",
         api_key=api_key,
@@ -21,7 +22,7 @@ async def test_re_act_agent_once_chat(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_multi_chat(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个通用助手",
         api_key=api_key,
@@ -35,7 +36,7 @@ async def test_re_act_agent_multi_chat(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_with_time(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个通用助手",
         api_key=api_key,
@@ -50,7 +51,7 @@ async def test_re_act_agent_with_time(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_with_think(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个通用助手",
         api_key=api_key,
@@ -65,7 +66,7 @@ async def test_re_act_agent_with_think(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_with_think_and_time(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个通用助手",
         api_key=api_key,
@@ -80,7 +81,7 @@ async def test_re_act_agent_with_think_and_time(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_with_tools(api_key: str):
-    tools = ToolsManager()
+    tools = ToolRegistry()
 
     @tools.tool(
         name="get_weather",
@@ -95,7 +96,7 @@ async def test_re_act_agent_with_tools(api_key: str):
     async def get_weather(city: str):
         return {"desc": "部分晴朗：19摄氏度，湿度69%"}
 
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个通用助手",
         api_key=api_key,
@@ -109,7 +110,7 @@ async def test_re_act_agent_with_tools(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_with_tools_and_stream(api_key: str):
-    tools = ToolsManager()
+    tools = ToolRegistry()
 
     @tools.tool(
         name="get_weather",
@@ -124,7 +125,7 @@ async def test_re_act_agent_with_tools_and_stream(api_key: str):
     async def get_weather(city: str):
         return {"desc": "部分晴朗：19摄氏度，湿度69%"}
 
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个通用助手",
         api_key=api_key,
@@ -140,7 +141,7 @@ async def test_re_act_agent_with_tools_and_stream(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_system_prompt_format(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -149,7 +150,7 @@ async def test_re_act_agent_system_prompt_format(api_key: str):
     )
     async for c in agent.run({"user": "你好呀", "system": {"role": "猫娘女仆"}}):
         logger.debug("测试 %s", c)
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}, 你的性格是{personality}",
         api_key=api_key,
@@ -164,7 +165,7 @@ async def test_re_act_agent_system_prompt_format(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_system_prompt_format_with_think(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -175,7 +176,7 @@ async def test_re_act_agent_system_prompt_format_with_think(api_key: str):
     )
     async for c in agent.run({"user": "你好呀", "system": {"role": "猫娘女仆"}}):
         logger.debug("测试 %s", c)
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}, 你的性格是{personality}",
         api_key=api_key,
@@ -192,7 +193,7 @@ async def test_re_act_agent_system_prompt_format_with_think(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_mcp(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -210,7 +211,7 @@ async def test_re_act_agent_mcp(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_mcp_with_think(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -231,7 +232,7 @@ async def test_re_act_agent_mcp_with_think(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_mcp_with_local_tool_mgr(api_key: str):
-    tools = ToolsManager()
+    tools = ToolRegistry()
 
     @tools.tool(
         name="get_weather",
@@ -246,7 +247,7 @@ async def test_re_act_agent_mcp_with_local_tool_mgr(api_key: str):
     async def get_weather(city: str):
         return {"desc": "部分晴朗：19摄氏度，湿度69%"}
 
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -275,7 +276,7 @@ async def test_re_act_agent_mcp_with_local_tool_mgr(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_mcp_with_local_tool_mgr_with_think(api_key: str):
-    tools = ToolsManager()
+    tools = ToolRegistry()
 
     @tools.tool(
         name="get_weather",
@@ -290,7 +291,7 @@ async def test_re_act_agent_mcp_with_local_tool_mgr_with_think(api_key: str):
     async def get_weather(city: str):
         return {"desc": "部分晴朗：19摄氏度，湿度69%"}
 
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -319,7 +320,7 @@ async def test_re_act_agent_mcp_with_local_tool_mgr_with_think(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_history(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -345,7 +346,7 @@ async def test_re_act_agent_history(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_history_with_think(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -373,7 +374,7 @@ async def test_re_act_agent_history_with_think(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_selection(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -402,7 +403,7 @@ async def test_re_act_agent_selection(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_with_others(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -424,7 +425,7 @@ async def test_re_act_agent_with_others(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_hook_tool_call(api_key: str):
-    tools = ToolsManager()
+    tools = ToolRegistry()
 
     @tools.tool(
         name="get_weather",
@@ -439,13 +440,13 @@ async def test_re_act_agent_hook_tool_call(api_key: str):
     async def get_weather(city: str):
         return {"desc": "部分晴朗：19摄氏度，湿度69%"}
 
-    async def test_hook(agent: ReActAgent, func: Function):
+    async def test_hook(agent: ConversationAgent, func: ToolInvocation):
         logger.debug("before call tool")
         resp = await agent.call_tool(func)
         logger.debug("after call tool %s", resp)
         return resp
 
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,
@@ -469,7 +470,7 @@ async def test_re_act_agent_hook_tool_call(api_key: str):
 
 @pytest.mark.asyncio
 async def test_re_act_agent_answer_format(api_key: str):
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="deepseek-v3.2",
         system_prompt="你是一个{role}",
         api_key=api_key,

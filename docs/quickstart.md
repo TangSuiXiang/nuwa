@@ -29,11 +29,11 @@ Create a basic agent that responds to user input:
 ```python
 # simple_agent.py
 import asyncio
-from src.nuwa.llm import OpenAI
+from src.nuwa.llm import LLMNode
 
 async def main():
     # Initialize the LLM
-    llm = OpenAI(
+    llm = LLMNode(
         model="gpt-4",
         system_prompt="You are a helpful assistant.",
         api_key="your-api-key-here"
@@ -64,10 +64,10 @@ Create a conversational agent that remembers previous interactions:
 ```python
 # chat_agent.py
 import asyncio
-from src.nuwa.chat import ChatLLM
-from src.nuwa.base import MessagesManager
+from src.nuwa.chat import ConversationAgent
+from src.nuwa.base import ConversationStorage
 
-class SimpleMemory(MessagesManager):
+class SimpleMemory(ConversationStorage):
     def __init__(self):
         self.messages = {}
     
@@ -82,7 +82,7 @@ class SimpleMemory(MessagesManager):
 async def main():
     # Initialize with memory
     memory = SimpleMemory()
-    chat_agent = ChatLLM(
+    chat_agent = ConversationAgent(
         model="gpt-4",
         system_prompt="You are a friendly conversational AI.",
         api_key="your-api-key-here",
@@ -108,18 +108,18 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### 3. ReAct Agent with Tools
+### 3. Reasoning and Acting Agent with Tools
 
 Create an advanced agent that can reason and use tools:
 
 ```python
-# react_agent.py
+# reasoning_agent.py
 import asyncio
-from src.nuwa.re_act import ReActAgent
-from src.nuwa.tool import ToolsManager, ToolObjectParameter, ToolParameter
+from src.nuwa.react_agent import ReasoningActingAgent
+from src.nuwa.tool import ToolRegistry, ToolObjectParameter, ToolParameter
 
-# Create tools manager
-tools = ToolsManager()
+# Create tools registry
+tools = ToolRegistry()
 
 # Register a calculator tool
 @tools.tool(
@@ -143,8 +143,8 @@ def calculate(expression: str):
         return {"error": str(e)}
 
 async def main():
-    # Initialize ReAct agent with tools
-    agent = ReActAgent(
+    # Initialize ReasoningActing agent with tools
+    agent = ReasoningActingAgent(
         model="gpt-4",
         system_prompt="You are a helpful assistant with calculation capabilities.",
         api_key="your-api-key-here",
@@ -178,21 +178,21 @@ Nuwa works with any OpenAI-compatible API. Configure your provider:
 
 ```python
 # OpenAI
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="gpt-4",
     api_key="sk-your-openai-key",
     base_url="https://api.openai.com/v1"
 )
 
 # Anthropic (via OpenAI compatibility layer)
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="claude-3-opus-20240229",
     api_key="your-anthropic-key",
     base_url="https://api.anthropic.com/v1/messages"  # Adjust as needed
 )
 
 # DeepSeek
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="deepseek-v3.2",
     api_key="your-deepseek-key",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -205,9 +205,9 @@ Store your API key securely using environment variables:
 
 ```python
 import os
-from src.nuwa.re_act import ReActAgent
+from src.nuwa.react_agent import ReasoningActingAgent
 
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="gpt-4",
     system_prompt="You are a helpful assistant.",
     api_key=os.getenv("OPENAI_API_KEY"),
@@ -226,7 +226,7 @@ python your_agent.py
 ### Pattern 1: Multi-turn Conversation
 ```python
 async def multi_turn_conversation():
-    agent = ReActAgent(
+    agent = ReasoningActingAgent(
         model="gpt-4",
         system_prompt="You are a helpful assistant.",
         api_key="your-key",
@@ -267,7 +267,7 @@ async def fetch_weather(city: str):
 
 ### Pattern 3: Streaming with Thinking Mode
 ```python
-agent = ReActAgent(
+agent = ReasoningActingAgent(
     model="deepseek-v3.2",
     system_prompt="Think step by step before answering.",
     api_key="your-key",
@@ -322,7 +322,7 @@ logging.basicConfig(level=logging.DEBUG)
 ## Next Steps
 
 1. **Explore the Examples**: Check the `tests/` directory for more comprehensive examples
-2. **Custom MessagesManager**: Implement persistent storage with databases like Qdrant
+2. **Custom ConversationStorage**: Implement persistent storage with databases like Qdrant
 3. **Advanced Tools**: Create tools that integrate with external APIs and services
 4. **MCP Integration**: Connect to Model Context Protocol endpoints for extended capabilities
 5. **Performance Optimization**: Tune parameters like `max_loop`, `temperature`, and streaming settings

@@ -1,7 +1,7 @@
 import pytest
 import logging
 
-from src.nuwa.search import (
+from src.nuwa.web_search_tools import (
     get_google_search_tool,
     get_baidu_search_tool,
     get_bing_search_tool,

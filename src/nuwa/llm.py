@@ -1,3 +1,11 @@
+"""Nuwa LLM 层模块，实现与大语言模型的基础交互。
+
+本模块提供 OpenAI 兼容的 LLM 节点实现，支持流式和非流式响应、系统提示格式化、
+时间感知和自定义上下文注入。遵循策略模式（P-002）和模板方法模式（P-005），
+继承自 Node 抽象基类，是 Nuwa 处理流水线的核心组件之一。
+设计规范：模块化（C-001）、类设计（C-005）、错误处理（C-012）、日志记录（C-016）。
+"""
+
 import os
 import json
 import asyncio
@@ -9,18 +17,41 @@ from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
+    ChatCompletion,
 )
 
 from openai import omit
 
-from .base import Node, InputChunk
+from .base import ProcessingNode, StreamChunk
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger()
 
 
-class OpenAI(Node):
+class LLMNode(ProcessingNode):
+    """LLM 节点实现，兼容 OpenAI 接口。
+
+    遵循策略模式（P-002），作为 ProcessingNode 的具体策略，提供与 OpenAI 兼容 API 的交互能力。
+    支持流式输出、推理内容分离、历史消息管理和时间感知。
+    设计规范：类名大驼峰（D-007）、类型提示（D-014）、单一职责（C-006）。
+
+    Attributes:
+        system_prompt: 系统提示模板，支持格式化变量。
+        with_time: 是否在系统提示中加入当前时间。
+        with_others: 其他自定义信息，将添加到系统提示前。
+        model: 使用的 LLM 模型名称。
+        temperature: 生成温度参数。
+        extra_body: 额外的 API 请求体参数。
+        need_init: 标识是否需要初始化。
+        stop: 停止词列表。
+        client: AsyncOpenAI 客户端实例。
+        think_open: 推理开始标记字符串。
+        symbol_mappings: 符号开闭映射表。
+        historical_messages: 历史消息缓存。
+        stream: 是否启用流式输出。
+    """
+
     def __init__(
         self,
         model: str,
@@ -34,6 +65,22 @@ class OpenAI(Node):
         base_url: str = "https://api.openai.com/v1",
         stream: bool = False,
     ):
+        """初始化 LLM 节点。
+
+        Args:
+            model: LLM 模型名称，如 "gpt-4"。
+            system_prompt: 系统提示模板，可包含格式化占位符。
+            api_key: OpenAI 兼容 API 的密钥。
+            temperature: 生成温度，默认为 0.6。
+            extra_body: 额外的 API 请求体参数，默认为空字典。
+            stop: 停止词列表，默认为空列表。
+            with_time: 是否在系统提示中加入当前时间，默认为 False。
+            with_others: 其他自定义信息字符串，将添加到系统提示前，默认为空字符串。
+            base_url: API 基础 URL，默认为 OpenAI 官方端点。
+            stream: 是否启用流式输出，默认为 False。
+
+        设计规范：参数类型提示（D-014）、默认参数合理（C-011）。
+        """
         self.system_prompt = system_prompt
         self.with_time = with_time
         self.with_others = with_others
@@ -44,22 +91,44 @@ class OpenAI(Node):
         self.stop = stop or []
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.think_open = "<think>"
-        self.symbols_open_close_map = {self.think_open: "</think>"}
+        self.symbol_mappings = {self.think_open: "</think>"}
         self.historical_messages: List[ChatCompletionMessageParam] = []
         self.stream = stream
 
-    async def __ainit__(self):
+    async def _async_initialize(self):
+        """异步初始化方法，用于执行一次性初始化任务。
+
+        当前仅记录调试日志，可扩展用于连接验证等。
+        设计规范：异步方法命名（D-006）、日志记录（C-016）。
+        """
         logger.debug("ainit")
 
-    async def parse_input(
-        self, input_chunks: Union[AsyncGenerator[InputChunk, None], Dict[str, Any]]
+    async def _parse_input_data(
+        self, input_chunks: Union[AsyncGenerator[StreamChunk, None], Dict[str, Any]]
     ) -> Dict[str, Any]:
+        """解析输入数据，转换为字典格式。
+
+        支持两种输入形式：异步生成器（流式）或字典（非流式）。
+        若为异步生成器，则收集所有 chunk 的内容并尝试解析为 JSON 字典；
+        若为字典，则直接返回。
+        遵循错误处理规范（C-012），对 JSON 解析失败抛出明确异常。
+
+        Args:
+            input_chunks: 输入数据，可以是异步生成器或字典。
+
+        Returns:
+            解析后的字典，包含用户输入、系统变量等。
+
+        Raises:
+            ValueError: 当输入为异步生成器且内容不是合法 JSON 时。
+        """
         if isinstance(input_chunks, AsyncGenerator):
             input_raw = ""
             async for chunk in input_chunks:
-                input_raw += chunk.content
-                if chunk.state == "END":
-                    break
+                if isinstance(chunk.content, str):
+                    input_raw += chunk.content
+                    if chunk.state == "END":
+                        break
             try:
                 return json.loads(input_raw)
             except json.JSONDecodeError as e:
@@ -67,9 +136,21 @@ class OpenAI(Node):
                 raise ValueError(f"Input is not valid JSON: {input_raw}") from e
         return input_chunks
 
-    async def generate_messages(
+    async def _prepare_conversation_messages(
         self, input_dict: Dict[str, Any]
     ) -> List[ChatCompletionMessageParam]:
+        """生成发送给 LLM 的消息列表。
+
+        根据输入字典格式化系统提示，加入时间信息和自定义前缀，
+        并整合历史消息，确保最后一条消息为用户输入。
+        设计规范：函数职责清晰（C-006）、类型提示（D-014）。
+
+        Args:
+            input_dict: 输入字典，包含 "system"、"user"、"historical_messages" 等字段。
+
+        Returns:
+            符合 OpenAI ChatCompletion 接口要求的消息列表。
+        """
         input_dict = input_dict or {}
         system_content = self.system_prompt.format(**input_dict.get("system", {}))
         proset_infos = []
@@ -78,7 +159,9 @@ class OpenAI(Node):
         if self.with_time:
             proset_infos.append(
                 "系统时间：{}".format(
-                    datetime.now(tz=ZoneInfo(os.environ.get("TZ") or "Asia/Shanghai")).isoformat()
+                    datetime.now(
+                        tz=ZoneInfo(os.environ.get("TZ") or "Asia/Shanghai")
+                    ).isoformat()
                 )
             )
         if proset_infos:
@@ -102,19 +185,38 @@ class OpenAI(Node):
         return messages
 
     async def run(
-        self, input_chunks: Union[AsyncGenerator[InputChunk, None], Dict[str, Any]]
-    ) -> AsyncGenerator[InputChunk, None]:
+        self, input_chunks: Union[AsyncGenerator[StreamChunk, None], Dict[str, Any]]
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """执行 LLM 调用，返回流式或非流式输出。
+
+        遵循模板方法模式（P-005），实现了 ProcessingNode.run 的具体逻辑。
+        处理流程：解析输入 → 生成消息 → 调用 API → 处理响应 → 输出 chunk。
+        支持流式输出中的推理内容分离，并自动处理速率限制错误（C-013）。
+        设计规范：复杂算法注释（D-012）、错误处理（C-012）、日志记录（C-016）。
+
+        Args:
+            input_chunks: 输入数据，可以是异步生成器或字典。
+
+        Yields:
+            StreamChunk: 输出数据块，状态为 "DOING" 或 "END"。
+
+        Raises:
+            RateLimitError: 当 API 速率限制时重试（已内部处理）。
+            Exception: 其他未捕获的异常会向上抛出。
+        """
         logger.debug("need init %s", self.need_init)
         if self.need_init:
-            await self.__ainit__()
+            await self._async_initialize()
             self.need_init = False
         while True:
             try:
-                input_dict = await self.parse_input(input_chunks)
+                input_dict = await self._parse_input_data(input_chunks)
                 logger.debug(
                     f"Model: {self.model}, Extra body: {self.extra_body}, Stop: {self.stop}"
                 )
-                messages = await self.generate_messages(input_dict=input_dict)
+                messages = await self._prepare_conversation_messages(
+                    input_dict=input_dict
+                )
                 logger.debug(
                     "messages %s", json.dumps(messages, ensure_ascii=False, indent=2)
                 )
@@ -128,7 +230,7 @@ class OpenAI(Node):
                     stop=self.stop,
                 )
 
-                if self.stream:
+                if self.stream and not isinstance(completion, ChatCompletion):
                     content = ""
                     reasoning_content = ""
                     in_reasoning_mode = False
@@ -139,40 +241,51 @@ class OpenAI(Node):
                         delta = chunk.choices[0].delta
                         logger.debug("delta %s", delta)
 
+                        # 处理普通文本内容
                         if delta.content:
                             if in_reasoning_mode:
-                                yield InputChunk(
+                                # 推理模式结束，输出闭合标记
+                                yield StreamChunk(
                                     state="DOING",
-                                    content=self.symbols_open_close_map.get(
-                                        self.think_open
+                                    content=self.symbol_mappings.get(
+                                        self.think_open, "</think>"
                                     ),
                                 )
                                 in_reasoning_mode = False
                             content += delta.content
-                            yield InputChunk(state="DOING", content=delta.content)
-                        elif (
-                            hasattr(delta, "reasoning_content")
-                            and delta.reasoning_content
+                            yield StreamChunk(state="DOING", content=delta.content)
+                        # 处理推理内容（如 OpenAI o1 模型）
+                        elif hasattr(delta, "reasoning_content") and getattr(
+                            delta, "reasoning_content"
                         ):
                             if not in_reasoning_mode:
-                                yield InputChunk(state="DOING", content=self.think_open)
+                                # 推理模式开始，输出开始标记
+                                yield StreamChunk(
+                                    state="DOING", content=self.think_open
+                                )
                                 in_reasoning_mode = True
-                            reasoning_content += delta.reasoning_content
-                            yield InputChunk(
-                                state="DOING", content=delta.reasoning_content
+                            reasoning_content += getattr(delta, "reasoning_content")
+                            yield StreamChunk(
+                                state="DOING",
+                                content=getattr(delta, "reasoning_content"),
                             )
+                    # 处理流结束时的边界情况
                     if content == "" and in_reasoning_mode:
-                        yield InputChunk(
+                        yield StreamChunk(
                             state="DOING",
-                            content=self.symbols_open_close_map.get(self.think_open),
+                            content=self.symbol_mappings.get(
+                                self.think_open, "</think>"
+                            ),
                         )
-                        yield InputChunk(state="END", content=reasoning_content)
+                        yield StreamChunk(state="END", content=reasoning_content)
                     else:
-                        yield InputChunk(state="END", content="")
-                else:
-                    yield InputChunk(
-                        state="END", content=completion.choices[0].message.content
+                        yield StreamChunk(state="END", content="")
+                elif isinstance(completion, ChatCompletion):
+                    # 非流式输出，直接返回完整内容
+                    yield StreamChunk(
+                        state="END", content=str(completion.choices[0].message.content)
                     )
                 break
             except RateLimitError:
+                # 速率限制时等待后重试，遵循错误处理规范（C-013）
                 await asyncio.sleep(0.1)

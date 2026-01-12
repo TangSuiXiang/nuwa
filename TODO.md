@@ -1,29 +1,48 @@
-# 开发文档撰写任务
+# Nuwa 命名重构任务清单
 
-## 目标
-为Nuwa项目撰写全面的开发文档，涵盖架构设计、代码设计、代码开发、设计模型和代码管理等方面的开发原则和规范。
+## 第一阶段：文件/模块重命名
+- [x] `re_act.py` → `react_agent.py`
+- [x] `qdrant.py` → `vector_store.py`
+- [x] `vector.py` → `embeddings.py`
+- [x] `search.py` → `web_search_tools.py`
+- [x] `alarm.py` → `scheduling_tools.py`
+- [x] `agent_group.py` → `multi_agent.py`
+- [x] 处理空文件 `plan.py` → `_plan.py` 和 `image.py` → `_image.py`
 
-## 步骤
-1. [x] 创建文档大纲
-2. [x] 撰写引言和项目概述
-3. [x] 撰写架构设计原则
-4. [x] 撰写代码设计规范
-5. [x] 撰写代码开发规范
-6. [x] 撰写设计模式应用
-7. [x] 撰写代码管理实践
-8. [x] 撰写测试策略
-9. [x] 撰写部署与运维
-10. [x] 撰写贡献指南
-11. [x] 撰写附录
-12. [x] 保存文档并更新索引
-13. [x] 为所有约束、规范和要求添加编号索引
-14. [x] 验证文档完整性
+## 第二阶段：类名优化
+### 基础类
+- [x] `Node` → `ProcessingNode`
+- [x] `InputChunk` → `StreamChunk`
+- [x] `MessagesManager` → `ConversationStorage`
 
-## 状态
-已完成
+### 智能体类
+- [x] `OpenAI` → `LLMNode`
+- [x] `ChatLLM` → `ConversationAgent`
+- [x] `ReActAgent` → `ReasoningActingAgent`
+- [x] `GroupAgent` → `MultiRoleAgent`
 
-## 产出文件
-- `docs/development_guide.md`：完整的开发指南文档（包含编号索引）
-- 更新了 `docs/index.md` 以添加开发指南链接
-- 更新了 `docs/zh/index.md` 以添加开发指南链接
-- 更新了 `TODO.md` 以反映完成状态
+### 工具类
+- [x] `ToolsManager` → `ToolRegistry`
+- [x] `Function` → `ToolInvocation`
+
+### 存储类
+- [x] `QdrantMessagesManager` → `VectorBackedStorage`
+
+## 第三阶段：方法/变量名优化
+### 方法名改进
+- [x] `__ainit__` → `_async_initialize`
+- [x] `parse_input` → `_parse_input_data`
+- [x] `generate_messages` → `_prepare_conversation_messages`
+- [x] `parse_labels` → `_parse_stream_tags`
+- [x] `parse_action` → `_extract_tool_calls`
+
+### 变量名改进
+- [x] `deps` → `dependencies`
+- [x] `open_symbols` → `_open_tags_stack`
+- [x] `cache` → `_character_buffer`
+- [x] `think_io` → `_reasoning_buffer`
+
+## 第四阶段：导入更新和文档
+- [x] 更新 `__init__.py` 中的导出
+- [x] 更新所有测试文件中的导入
+- [x] 更新文档中的API引用（快速入门指南已更新，其他文档也已相应调整）
