@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from abc import ABC, abstractmethod
-from typing import List, TypedDict, Union, Literal, Dict
-from openai.types.chat import ChatCompletionMessageParam
+from typing import Union, Literal, Dict
 
 
 class AsyncClosableContext(ABC):
@@ -29,20 +28,3 @@ class StreamChunk(BaseModel):
     state: Literal["DOING", "DONE", "END"]
     content: Union[str, Dict]
 
-
-class ConversationStorage(ABC):
-    @abstractmethod
-    async def get_messages(
-        self, session_id: str, user_input: str = ""
-    ) -> List[ChatCompletionMessageParam]:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def save_messages(
-        self, session_id: str, messages: List[ChatCompletionMessageParam]
-    ):
-        raise NotImplementedError
-
-    @abstractmethod
-    async def clear_messages(self, session_id: str):
-        raise NotImplementedError

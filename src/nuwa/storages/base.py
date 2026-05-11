@@ -1,7 +1,10 @@
 from abc import abstractmethod
-from ..compressors import Compressor
+from typing import ByteString, Hashable, List, Optional
+
+from openai.types.chat import ChatCompletionMessageParam
+
 from ..base import AsyncClosableContext
-from typing import ByteString, Hashable, Optional
+from ..compressors import Compressor
 
 
 class KVStorage(AsyncClosableContext):
@@ -31,4 +34,23 @@ class KVStorage(AsyncClosableContext):
 
     @abstractmethod
     async def _get(self, key: Hashable) -> bytes:
+        raise NotImplementedError
+
+
+class ConversationStorage(AsyncClosableContext):
+
+    @abstractmethod
+    async def get_messages(
+        self, session_id: str, user_input: str = ""
+    ) -> List[ChatCompletionMessageParam]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def save_messages(
+        self, session_id: str, messages: List[ChatCompletionMessageParam]
+    ):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def clear_messages(self, session_id: str):
         raise NotImplementedError

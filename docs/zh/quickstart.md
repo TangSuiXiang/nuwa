@@ -65,7 +65,7 @@ python simple_agent.py
 # chat_agent.py
 import asyncio
 from src.nuwa.chat import ConversationAgent
-from src.nuwa.base import ConversationStorage
+from src.nuwa.storages import ConversationStorage
 
 class SimpleMemory(ConversationStorage):
     def __init__(self):
